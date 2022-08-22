@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/files">
+        <file>drivers.zip</file>
+        <file>platform-tools.zip</file>
+        <file>7z.exe</file>
+        <file>curl.exe</file>
+    </qresource>
+</RCC>
