@@ -2,7 +2,7 @@
 Flash your Xiaomi device automatically.
 
 This is a different version of my other project [Redmi 6/6A Flashers](https://github.com/Sucharek233/Redmi6-6AFlashers).
-You can use any phone here.
+You can use any Xiaomi phone here.
 
 ## Program walkrough
 First thing you're gonna see.
