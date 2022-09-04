@@ -66,10 +66,18 @@ Once you made your decision, it will verify device connection (and if it's the s
 ![image](https://user-images.githubusercontent.com/31042508/186002372-8c0b96ce-3184-4122-8f72-a4054c1a1971.png)
 ![image](https://user-images.githubusercontent.com/31042508/186002741-358de92d-c451-4784-8a2d-69c4ed989206.png)
 
-And the flash will start.
+And the flash will start. You can cancel flash and save output log.
 
-![5-3](https://user-images.githubusercontent.com/31042508/186005071-eca9f72b-b1d8-4943-8c0d-7ff417223ff1.png)
-![5-3-1](https://user-images.githubusercontent.com/31042508/186005080-170ef24e-9c22-4d12-a93d-a90eafa5cb33.png)
+![outputlog](https://user-images.githubusercontent.com/31042508/188313671-5eb22acc-1c81-46b8-8c8f-1987969e9809.png)
+![outputlog2](https://user-images.githubusercontent.com/31042508/188313673-e643c470-ec23-4821-b767-a5188bfd856f.png)
+
+You can cancel the flash if you want to and some extra features will show up.
+
+![cancelflash](https://user-images.githubusercontent.com/31042508/188313689-794fe20e-1bfd-408b-92c9-1112a1792c0b.png)
+
+If flash fails, you can retry, ignore anti-rollback (dangerous), clean up temporary files or close.
+
+![errorflash](https://user-images.githubusercontent.com/31042508/188313728-878b760f-b5c5-4555-b008-6fbcc097ae02.png)
 
 When it's done, you can clean the temporary files if you want to.
 
