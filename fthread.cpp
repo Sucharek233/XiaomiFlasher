@@ -2,6 +2,8 @@
 
 QString sn;
 
+int errStop;
+
 QString getUserPath()
 {
     QStringList homePath = QStandardPaths::standardLocations(QStandardPaths::HomeLocation);
@@ -45,6 +47,21 @@ QString getPercentage(QString path)
     return percentage;
 }
 
+void ignoreARB(QString path)
+{
+    QFile modify(path);
+    QString content;
+    modify.open(QIODevice::ReadWrite);
+    int after = 0;
+    while(!modify.atEnd()) {
+        QString line = modify.readLine();
+        if (line.startsWith("fastboot")) {content += line;}
+        if (after == 1) {content += line;}
+        if (line.contains("reboot")) {after = 1;}
+    }
+    modify.resize(0); modify.write(content.toUtf8());  modify.close();
+}
+
 void fThread::process(QString app, QStringList command, QString path)
 {
     QProcess process;
@@ -73,6 +90,90 @@ void copyPath(QString source, QString destination)
     foreach (QString f, dir.entryList(QDir::Files)) {
         QFile::copy(source + QDir::separator() + f, destination + QDir::separator() + f);
     }
+}
+
+QString readProg(QString path)
+{
+    QFile prog(path + "Modified.txt");
+    prog.open(QIODevice::ReadOnly);
+    QString content = prog.readAll();
+    prog.close();
+    return content;
+}
+
+void terminateFlash()
+{
+    QProcess kill;
+    kill.start("cmd", QStringList() << "/C" << "taskkill" << "/IM" << "fastboot.exe" << "/F");
+    kill.waitForFinished();
+    kill.start("cmd", QStringList() << "/C" << "taskkill" << "/IM" << "cmd.exe" << "/F");
+    kill.waitForFinished();
+}
+
+void modifyOut(QString path)
+{
+    QFile check(path + ".txt");
+    check.open(QIODevice::ReadOnly);
+    QString line;
+    QString content;
+    int replace = 0;
+    while (!check.atEnd()) {
+        replace = 0;
+        line = check.readLine();
+        if (line.contains("getvar product")) {replace = 0; if (line.contains("exit /B 1")) {replace = 1; break;}}
+    }
+    QFile get(path + ".txt"); get.open(QIODevice::ReadOnly); content = get.readAll(); get.close();
+    if (replace == 1) {content.replace(line, "");}
+    QFile write(path + "Modified.txt"); write.open(QIODevice::ReadWrite); write.resize(0); write.write(content.toUtf8()); write.close();
+    check.close();
+
+}
+
+int mismatch(QString path)
+{
+    QFile check(path + ".txt");
+    check.open(QIODevice::ReadOnly);
+    QString line;
+    int toReturn = 0;
+    while (!check.atEnd()) {
+        line = check.readLine().simplified();
+        if (line == "Missmatching image and device") {
+            toReturn = 1;
+            break;
+        }
+    }
+    return toReturn;
+}
+
+void fThread::flashProgress(QStringList command, QString file)
+{
+    QProcess flash;
+    flash.startDetached("cmd", command);
+    msleep(50);
+    QString content = readProg(file);  flashProg("Please plug in your phone\n" + content);
+    while (true) {
+        modifyOut(file);
+        if (mismatch(file) == 1) {terminateFlash(); errStop = 1; break;}
+        QString newContent = "Please plug in your phone\n" + readProg(file);
+        if (content != newContent) {
+            flashProg(newContent);
+            if (newContent.contains("pause")) {terminateFlash(); break;}
+            if (newContent.contains("exit /B 1")) {
+                terminateFlash(); errStop = 1; break;
+            }
+            content = "Please plug in your phone\n" + readProg(file);
+        }
+        msleep(50);
+    }
+    content = "Please plug in your phone\n" + readProg(file);
+    flashProg(content);
+}
+
+void fThread::ARB()
+{
+    ignoreARB(dir + "ROM/ROM/flash_all.bat");
+    ignoreARB(dir + "ROM/ROM/flash_all_except_data.bat");
+    ignoreARB(dir + "ROM/ROM/flash_all_except_data_storage.bat");
 }
 
 void fThread::run()
@@ -207,6 +308,13 @@ void fThread::run()
             int avoidComplete = 0;
             int extractSwitch = 1;
             int misc = 1;
+            int modify = 1;
+
+            QString checkExisting = "Checking for any older ROM files... "; emit update (checkExisting);
+            QDir oldROM(dir + "ROM/ROM");
+            if (oldROM.exists()) {oldROM.removeRecursively();}
+            checkExisting += "Done"; emit update (checkExisting);
+            sleep(1);
             if (romType == "link") {
                 command.clear(); command << "/C" << dir + "curl.exe " + romLink + " --output " + dir + "ROM/ROM.tgz --insecure 2>" + dir + "ROM/out.txt";
                 getROMReady.startDetached("cmd", command);
@@ -227,10 +335,8 @@ void fThread::run()
                 extProg = "Copying folder contents... "; emit update(extProg);
                 QDir create; create.mkpath(dir + "ROM/ROM");
                 copyPath(romLink, dir + "ROM/ROM");
-                extProg += "Done\n\n"
-                           "Please proceed to the next step.";
+                extProg += "Done\n\n";
                 emit update(extProg);
-                emit update("enable");
             } else if (romType == "extract") {
                 if (romLink.endsWith(".tgz")) {
                     dlProg = "Copying ROM archive... "; emit update(dlProg);
@@ -304,14 +410,15 @@ void fThread::run()
                 emit progBar(75);
                 QDir rename; rename.rename(dir + "ROM/" + getROMFolderName(dir + "ROM"), dir + "ROM/ROM");
                 emit progBar(100);
-                extProg += "Done\n\n";
+                extProg += "Done\n";
+                emit update(checkInternet + dlProg + extProg);
                 sleep(2);
                 emit progBar(500);
-
+            }
+            if (modify == 1) {
                 emit update(checkInternet + dlProg + extProg + "Finished");
-
                 emit update("enable");
-                }
+            }
             }
             stopRunning();
         } else if (function == 4) {
@@ -352,25 +459,37 @@ void fThread::run()
             QFile::copy(dir + "platform-tools/AdbWinApi.dll", dir + "ROM/ROM/AdbWinApi.dll");
             QFile::copy(dir + "platform-tools/AdbWinUsbApi.dll", dir + "ROM/ROM/AdbWinUsbApi.dll");
 
+            QFile rmOldOut(dir + "ROM/ROM/out.txt"); if (rmOldOut.exists()) {rmOldOut.remove();}
+
             emit update("Flashing...");
+
             if (option == 1) {
-                system("cmd /C \"cd " + dir.toUtf8() + "ROM/ROM &&" + dir.toUtf8() + "ROM/ROM/flash_all.bat && "
-                                                    "echo Warning! This is NOT logged. If you received any errors, please copy this whole output. && "
-                                                    "echo Finished && pause\"");
+                flashProgress(QStringList() << "cmd" << "/C" << dir.toUtf8() + "ROM/ROM/flash_all.bat 1>" +
+                              dir.toUtf8() + "ROM/ROM/out.txt" <<  "2>&1", dir + "ROM/ROM/out");
             } else if (option == 2) {
-                system("cmd /C \"cd " + dir.toUtf8() + "ROM/ROM &&" + dir.toUtf8() + "ROM/ROM/flash_all_except_data_storage.bat && "
-                                                    "echo Warning! This is NOT logged. If you received any errors, please copy this whole output. && "
-                                                    "echo Finished && pause\"");
+                QFile check(dir + "flash_all_except_data.bat");
+                if (check.exists()) {
+                    flashProgress(QStringList() << "cmd" << "/C" << dir.toUtf8() + "ROM/ROM/flash_all_except_data.bat 1>" <<
+                                  dir.toUtf8() + "ROM/ROM/out.txt" << "2>&1", dir + "ROM/ROM/out");
+                } else {
+                    flashProgress(QStringList() << "cmd" << "/C" << dir.toUtf8() + "ROM/ROM/flash_all_except_data_storage.bat 1>" <<
+                                  dir.toUtf8() + "ROM/ROM/out.txt" << "2>&1", dir + "ROM/ROM/out");
+                }
             }
 
-            emit update("enable");
-            emit update("Flashing finished!\n"
-                        "If you don't want to clean temporary files,\n"
-                        "close this window now.\n"
-                        "If you want to clean them,\n"
-                        "click on the next button.\n\n"
-                        "You should have your phone flashed now.\n"
-                        "Enjoy!");
+            if (errStop == 0) {
+                emit update("flashFinish");
+                emit update("Flashing finished!\n"
+                            "If you don't want to clean temporary files,\n"
+                            "close this window now.\n"
+                            "If you want to clean them,\n"
+                            "click on the next button.\n\n"
+                            "You should have your phone flashed now.\n"
+                            "Enjoy!");
+            } else {
+                emit update("flashError");
+                errStop = 0;
+            }
             }
             stopRunning();
         } else if (function == 5) {

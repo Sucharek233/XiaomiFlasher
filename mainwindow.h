@@ -4,6 +4,7 @@
 #include "qlabel.h"
 #include "fthread.h"
 #include "resume.h"
+#include "flashlog.h"
 #include <iostream>
 #include <QMainWindow>
 #include <QStandardPaths>
@@ -13,6 +14,8 @@
 #include <QProgressBar>
 #include <QLineEdit>
 #include <QFileDialog>
+#include <QPlainTextEdit>
+#include <QScrollBar>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -57,11 +60,19 @@ private slots:
     void extract_clicked();
     void folder_clicked();
 
+    void updateFlash(QString content);
+    void cancelFlash(QString content);
+
+    void on_pushButton_RetryFlash_clicked();
+
+    void on_pushButton_ARB_clicked();
+
 private:
     Ui::MainWindow *ui;
 
     fThread fT;
     resume startFrom;
+    flashLog log;
 
     QLabel *lText;
     QLabel *lProg;
@@ -74,5 +85,6 @@ private:
     QPushButton *extract;
     QPushButton *folder;
     QLineEdit *iROM;
+    QPlainTextEdit *flashOut;
 };
 #endif // MAINWINDOW_H

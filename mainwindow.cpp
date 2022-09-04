@@ -143,8 +143,13 @@ void MainWindow::switchScenes(int scene)
         ui->gridLayout_Content->addWidget(spacer, 2, 0);
         fT.switchFunctions(4);
         fT.start();
+
+        log.setModal(false);
+        log.exec();
     } else if (scene == 9) {
-        ui->pushButton_Next->setEnabled(false);
+        ui->pushButton_Next->setVisible(false);
+        ui->pushButton_RetryFlash->setVisible(false);
+        ui->pushButton_ARB->setVisible(false);
         ui->label_Flash->setStyleSheet(stylesheet + "color: green;");
         ui->label_Cleanup->setStyleSheet(stylesheet + "color: cyan;");
         ui->labelMain->setText("Temporary files cleanup");
@@ -198,6 +203,23 @@ void MainWindow::setDlProgText(QString text)
     } else if (text == "close") {
         ui->pushButton_Next->setVisible(false);
         ui->pushButton_Close->setVisible(true);
+    } else if (text == "flashFinish") {
+        log.updateLog("finished");
+        ui->pushButton_Close->setVisible(true);
+        ui->pushButton_Next->setEnabled(true);
+        ui->pushButton_Next->setText("Clean temporary files");
+    } else if (text == "flashError") {
+        log.updateLog("error");
+        ui->pushButton_Close->setVisible(true);
+        ui->pushButton_Next->setEnabled(true);
+        ui->pushButton_Next->setText("Clean temporary files");
+        lProg->setText("Flash failed!\n"
+                       "You can retry, ignore anti-rollback (ARB),\n"
+                       "clean up temporary files or close.\n\n"
+                       "WARNING! Ignoring ARB may lead to hard bricks!\n"
+                       "I'm not responsible for bricked devices\nand hardware damages!");
+        ui->pushButton_RetryFlash->setVisible(true);
+        ui->pushButton_ARB->setVisible(true);
     } else {
         lProg->setText(text);
     }
@@ -369,6 +391,33 @@ void MainWindow::extraType(QString extra)
     if (extra == "extract") {ui->pushButton_Next->setEnabled(false);}
 }
 
+void MainWindow::updateFlash(QString content)
+{
+    log.updateLog(content);
+}
+
+void MainWindow::cancelFlash(QString content)
+{
+    fT.terminate();
+    QProcess kill;
+    if (!fT.isFinished()) {
+        cancelFlash(content);
+    } else {
+        updateFlash(content);
+
+        ui->pushButton_Close->setVisible(true);
+        ui->pushButton_RetryFlash->setVisible(true);
+        ui->pushButton_ARB->setVisible(true);
+        ui->pushButton_Next->setEnabled(true);
+        ui->pushButton_Next->setText("Clean temporary files");
+        setDlProgText("Flash has been canceled.\n"
+                      "You can retry, ignore anti-rollback (ARB),\n"
+                      "clean up temporary files or close.\n\n"
+                      "WARNING! Ignoring ARB may lead to hard bricks!\n"
+                      "I'm not responsible for bricked devices\nand hardware damages!");
+    }
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -377,6 +426,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->pushButton_Close->setVisible(false);
     ui->pushButton_Undetected->setVisible(false);
+    ui->pushButton_RetryFlash->setVisible(false);
+    ui->pushButton_ARB->setVisible(false);
 
     QFont size; size.setPointSize(14);
     iROM = new QLineEdit; iROM->setFont(size);
@@ -402,6 +453,8 @@ MainWindow::MainWindow(QWidget *parent)
     QObject::connect(&fT,SIGNAL(update(const QString&)),SLOT(setDlProgText(const QString&)), Qt::AutoConnection);
     QObject::connect(&fT,SIGNAL(msgBox(const QString&, const QString&, const int&)),SLOT(msgBoxThread(const QString&, const QString&, const int&)), Qt::AutoConnection);
     QObject::connect(&fT,SIGNAL(progBar(const int&)),SLOT(progressBar(const int&)), Qt::AutoConnection);
+    QObject::connect(&fT,SIGNAL(flashProg(const QString&)),SLOT(updateFlash(const QString&)), Qt::AutoConnection);
+    QObject::connect(&log,SIGNAL(cancel(const QString&)),SLOT(cancelFlash(const QString&)), Qt::AutoConnection);
 
     QObject::connect(iROM, &QLineEdit::textChanged, this, &MainWindow::iROM_text_changed);
     QObject::connect(rLink, &QRadioButton::toggled, this, &MainWindow::rLink_toggled);
@@ -512,4 +565,38 @@ void MainWindow::on_pushButton_Undetected_clicked()
                 "If you didn't understand this guide, check out <a href=\"https://www.reddit.com/r/SuchareksGuides/comments/wuzize/detailed_driver_fix_guide_a_part_of_my_flashing\">this</a> one. It's more detailed with pictures.");
     fix.setStyleSheet(msgBoxStylesheet);
     fix.exec();
+}
+
+void MainWindow::on_pushButton_RetryFlash_clicked()
+{
+    ui->pushButton_RetryFlash->setVisible(false);
+    ui->pushButton_ARB->setVisible(false);
+    ui->pushButton_Close->setVisible(false);
+    ui->pushButton_Next->setEnabled(false);
+    ui->pushButton_Next->setText("Next");
+    log.updateButton();
+    fT.start();
+    log.updateLog("clear");
+    log.exec();
+}
+
+void MainWindow::on_pushButton_ARB_clicked()
+{
+    QMessageBox sure;
+    sure.setStyleSheet(msgBoxStylesheet);
+    QPushButton* yes = sure.addButton("Yes", QMessageBox::YesRole);
+    QPushButton* no = sure.addButton("No", QMessageBox::NoRole);
+    sure.setWindowTitle("Ignore ARB?");
+    sure.setText("WARNING! Ignoring anti-rollback may lead to hard bricks!\n"
+                 "I am not reponsible for bricked devices\nand hardware damages!\n\n"
+                 "You have been warned.");
+    sure.exec();
+    if (sure.clickedButton() == yes) {
+        fT.ARB();
+        QMessageBox done;
+        done.setStyleSheet(msgBoxStylesheet);
+        done.setWindowTitle("ARB Ignored");
+        done.setText("Anti-rollback has been ignored.");
+        done.exec();
+    } else if (sure.clickedButton() == no) {}
 }

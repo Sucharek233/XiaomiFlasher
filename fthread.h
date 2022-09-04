@@ -21,6 +21,10 @@ public:
 
     QString getCodename() {return codename;}
 
+    void flashProgress(QStringList command, QString file);
+
+    void ARB();
+
 public slots:
     void stopRunning();
 
@@ -44,6 +48,8 @@ signals:
    void msgBox(QString, QString, int);
 
    void progBar(int);
+
+   void flashProg(QString);
 
 private:
     bool isRunning;
